@@ -33,6 +33,38 @@ export function addStatsToHabit(habit: Habit): HabitWithStats {
   };
 }
 
+export function addDaysToDateString(dateString: string, days: number): string {
+  const date = new Date(dateString);
+  date.setDate(date.getDate() + days);
+  return formatDate(date);
+}
+
+export function getLatestDate(completedDates: string[]): string | null {
+  if (completedDates.length === 0) return null;
+  const sorted = [...completedDates].sort();
+  return sorted[sorted.length - 1] ?? null;
+}
+
+export function calculateStreakFromDates(
+  completedDates: string[],
+  lastCompletedDate?: string | null
+): number {
+  if (completedDates.length === 0) return 0;
+  const latest = lastCompletedDate ?? getLatestDate(completedDates);
+  if (!latest) return 0;
+
+  const dateSet = new Set(completedDates);
+  let streak = 0;
+  let cursor = latest;
+
+  while (dateSet.has(cursor)) {
+    streak += 1;
+    cursor = addDaysToDateString(cursor, -1);
+  }
+
+  return streak;
+}
+
 export function getLast12Weeks(): Date[] {
   const dates: Date[] = [];
   const today = new Date();

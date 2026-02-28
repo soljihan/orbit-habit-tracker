@@ -99,6 +99,29 @@
   .duration-300 {
     animation-duration: 0.3s;
   }
+
+  @keyframes toast-slide-fade {
+    0% {
+      transform: translateX(24px);
+      opacity: 0;
+    }
+    12% {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    80% {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(12px);
+      opacity: 0;
+    }
+  }
+
+  .streak-toast {
+    animation: toast-slide-fade 3s ease-in-out forwards;
+  }
 }
 
 /* Custom scrollbar */

@@ -1,16 +1,37 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import {
+  type DragEndEvent,
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { storage } from '@/lib/storage';
 import { addStatsToHabit } from '@/lib/utils';
 import { HabitWithStats } from '@/lib/types';
-import { HabitItem } from '@/components/HabitItem';
+import { SortableHabitItem } from '@/components/SortableHabitItem';
 import { AddHabitModal } from '@/components/AddHabitModal';
+import { StreakToast } from '@/components/StreakToast';
 
 export default function Home() {
   const [habits, setHabits] = useState<HabitWithStats[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [streakToast, setStreakToast] = useState<{
+    streakCount: number;
+    habitName: string;
+    message: string;
+  } | null>(null);
+  const toastTimeoutRef = useRef<number | null>(null);
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
+    })
+  );
 
   useEffect(() => {
     // Load habits from localStorage on mount
@@ -20,6 +41,11 @@ export default function Home() {
       setIsLoaded(true);
     };
     loadInitialHabits();
+    return () => {
+      if (toastTimeoutRef.current) {
+        window.clearTimeout(toastTimeoutRef.current);
+      }
+    };
   }, []);
 
   const loadHabits = () => {
@@ -32,6 +58,32 @@ export default function Home() {
     loadHabits();
   };
 
+  const showStreakToast = (streakCount: number, habitName: string) => {
+    setStreakToast({ streakCount, habitName, message: "You're on fire!" });
+
+    if (toastTimeoutRef.current) {
+      window.clearTimeout(toastTimeoutRef.current);
+    }
+    toastTimeoutRef.current = window.setTimeout(() => {
+      setStreakToast(null);
+      toastTimeoutRef.current = null;
+    }, 3000);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    const oldIndex = habits.findIndex(habit => habit.id === activeId);
+    const newIndex = habits.findIndex(habit => habit.id === overId);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(habits, oldIndex, newIndex);
+    setHabits(reordered);
+    storage.saveHabits(reordered.map(({ consistencyScore, ...habit }) => habit));
+  };
+
   if (!isLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -42,6 +94,13 @@ export default function Home() {
 
   return (
     <div className="min-h-screen relative overflow-hidden">
+      {streakToast && (
+        <StreakToast
+          streakCount={streakToast.streakCount}
+          habitName={streakToast.habitName}
+          message={streakToast.message}
+        />
+      )}
       {/* Animated background gradient */}
       <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 animate-gradient" />
       
@@ -114,15 +173,27 @@ export default function Home() {
             </button>
           </div>
         ) : (
-          <div className="space-y-4">
-            {habits.map((habit) => (
-              <HabitItem
-                key={habit.id}
-                habit={habit}
-                onUpdate={loadHabits}
-              />
-            ))}
-          </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={habits.map(habit => habit.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-4">
+                {habits.map((habit) => (
+                  <SortableHabitItem
+                    key={habit.id}
+                    habit={habit}
+                    onUpdate={loadHabits}
+                    onComplete={showStreakToast}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         )}
 
         {/* Stats footer */}
