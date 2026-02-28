@@ -16,11 +16,13 @@ import { HabitWithStats } from '@/lib/types';
 import { SortableHabitItem } from '@/components/SortableHabitItem';
 import { AddHabitModal } from '@/components/AddHabitModal';
 import { StreakToast } from '@/components/StreakToast';
+import { playClickSound, playShimmerSound } from '@/lib/sound';
 
 export default function Home() {
   const [habits, setHabits] = useState<HabitWithStats[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isSoundMuted, setIsSoundMuted] = useState(false);
   const [streakToast, setStreakToast] = useState<{
     streakCount: number;
     habitName: string;
@@ -48,6 +50,14 @@ export default function Home() {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const saved = localStorage.getItem('orbit-sound-muted');
+    if (saved === 'true') {
+      setIsSoundMuted(true);
+    }
+  }, []);
+
   const loadHabits = () => {
     const loadedHabits = storage.getHabits().map(addStatsToHabit);
     setHabits(loadedHabits);
@@ -68,6 +78,26 @@ export default function Home() {
       setStreakToast(null);
       toastTimeoutRef.current = null;
     }, 3000);
+  };
+
+  const handleSoundToggle = () => {
+    setIsSoundMuted((current) => {
+      const nextValue = !current;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('orbit-sound-muted', String(nextValue));
+      }
+      return nextValue;
+    });
+  };
+
+  const handleHabitComplete = (streakCount: number, habitName: string) => {
+    showStreakToast(streakCount, habitName);
+    if (!isSoundMuted) {
+      playClickSound();
+      if (streakCount > 0 && streakCount % 7 === 0) {
+        playShimmerSound();
+      }
+    }
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -101,6 +131,43 @@ export default function Home() {
           message={streakToast.message}
         />
       )}
+      <button
+        type="button"
+        onClick={handleSoundToggle}
+        className="fixed right-6 top-6 z-50 rounded-full border border-white/20 bg-white/10 p-3 text-white/70 backdrop-blur-xl transition-colors hover:bg-white/20 hover:text-white"
+        aria-label={isSoundMuted ? 'Unmute sounds' : 'Mute sounds'}
+        title={isSoundMuted ? 'Unmute sounds' : 'Mute sounds'}
+      >
+        {isSoundMuted ? (
+          <svg
+            className="h-5 w-5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M9 9L4 9v6h5l5 5V4z" />
+            <path d="M16 9l5 5" />
+            <path d="M21 9l-5 5" />
+          </svg>
+        ) : (
+          <svg
+            className="h-5 w-5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M9 9L4 9v6h5l5 5V4z" />
+            <path d="M15 9a4 4 0 010 6" />
+            <path d="M17.7 7.3a8 8 0 010 9.4" />
+          </svg>
+        )}
+      </button>
       {/* Animated background gradient */}
       <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 animate-gradient" />
       
@@ -188,7 +255,7 @@ export default function Home() {
                     key={habit.id}
                     habit={habit}
                     onUpdate={loadHabits}
-                    onComplete={showStreakToast}
+                    onComplete={handleHabitComplete}
                   />
                 ))}
               </div>
