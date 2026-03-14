@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   type DragEndEvent,
   DndContext,
@@ -20,6 +20,8 @@ import { playClickSound, playShimmerSound } from '@/lib/sound';
 
 export default function Home() {
   const [habits, setHabits] = useState<HabitWithStats[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isSoundMuted, setIsSoundMuted] = useState(false);
@@ -36,13 +38,12 @@ export default function Home() {
   );
 
   useEffect(() => {
-    // Load habits from localStorage on mount
-    const loadInitialHabits = () => {
-      const loadedHabits = storage.getHabits().map(addStatsToHabit);
-      setHabits(loadedHabits);
+    const loadInitial = () => {
+      setHabits(storage.getHabits().map(addStatsToHabit));
+      setCategories(storage.getCategories());
       setIsLoaded(true);
     };
-    loadInitialHabits();
+    loadInitial();
     return () => {
       if (toastTimeoutRef.current) {
         window.clearTimeout(toastTimeoutRef.current);
@@ -59,12 +60,24 @@ export default function Home() {
   }, []);
 
   const loadHabits = () => {
-    const loadedHabits = storage.getHabits().map(addStatsToHabit);
-    setHabits(loadedHabits);
+    setHabits(storage.getHabits().map(addStatsToHabit));
   };
 
-  const handleAddHabit = (name: string) => {
-    storage.addHabit(name);
+  const loadCategories = () => {
+    setCategories(storage.getCategories());
+  };
+
+  const handleAddCategory = (name: string) => {
+    storage.addCategory(name);
+    loadCategories();
+  };
+
+  const handleAddHabit = (name: string, category: string | null) => {
+    if (category) {
+      storage.addCategory(category);
+      loadCategories();
+    }
+    storage.addHabit(name, category);
     loadHabits();
   };
 
@@ -100,6 +113,19 @@ export default function Home() {
     }
   };
 
+  const filteredHabits =
+    activeFilter === null
+      ? habits
+      : habits.filter((h) => h.category === activeFilter);
+
+  const categoryPills = useMemo(() => {
+    const fromHabits = new Set(
+      habits.map((h) => h.category).filter((c): c is string => !!c)
+    );
+    const fromStore = new Set(categories);
+    return [...new Set([...fromStore, ...fromHabits])].sort();
+  }, [categories, habits]);
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -134,7 +160,7 @@ export default function Home() {
       <button
         type="button"
         onClick={handleSoundToggle}
-        className="fixed right-6 top-6 z-50 rounded-full border border-white/20 bg-white/10 p-3 text-white/70 backdrop-blur-xl transition-colors hover:bg-white/20 hover:text-white"
+        className="fixed left-6 top-6 z-50 rounded-full border border-white/20 bg-white/10 p-3 text-white/70 backdrop-blur-xl transition-colors hover:bg-white/20 hover:text-white"
         aria-label={isSoundMuted ? 'Unmute sounds' : 'Mute sounds'}
         title={isSoundMuted ? 'Unmute sounds' : 'Mute sounds'}
       >
@@ -190,7 +216,7 @@ export default function Home() {
         </div>
 
         {/* Add habit button */}
-        <div className="mb-8 flex justify-center">
+        <div className="mb-6 flex justify-center">
           <button
             onClick={() => setIsModalOpen(true)}
             className="group px-8 py-4 rounded-2xl bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white font-semibold shadow-2xl shadow-purple-500/30 transition-all duration-300 hover:scale-105 flex items-center gap-3"
@@ -209,6 +235,39 @@ export default function Home() {
             Add New Habit
           </button>
         </div>
+
+        {/* Filter pills */}
+        {habits.length > 0 && (
+          <div className="mb-8 overflow-x-auto pb-2 -mx-1">
+            <div className="flex gap-2 min-w-max px-1">
+              <button
+                type="button"
+                onClick={() => setActiveFilter(null)}
+                className={`shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                  activeFilter === null
+                    ? 'bg-gradient-to-r from-purple-500/40 to-cyan-500/40 border border-purple-400/60 text-white shadow-[0_0_12px_rgba(168,85,247,0.4)]'
+                    : 'bg-white/5 border border-white/10 text-white/70 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                All
+              </button>
+              {categoryPills.map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setActiveFilter(cat)}
+                  className={`shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                    activeFilter === cat
+                      ? 'bg-gradient-to-r from-purple-500/40 to-cyan-500/40 border border-purple-400/60 text-white shadow-[0_0_12px_rgba(168,85,247,0.4)]'
+                      : 'bg-white/5 border border-white/10 text-white/70 hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Habits list */}
         {habits.length === 0 ? (
@@ -246,18 +305,35 @@ export default function Home() {
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={habits.map(habit => habit.id)}
+              items={filteredHabits.map(habit => habit.id)}
               strategy={verticalListSortingStrategy}
             >
               <div className="space-y-4">
-                {habits.map((habit) => (
-                  <SortableHabitItem
-                    key={habit.id}
-                    habit={habit}
-                    onUpdate={loadHabits}
-                    onComplete={handleHabitComplete}
-                  />
-                ))}
+                {filteredHabits.length === 0 ? (
+                  <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
+                    <p className="text-white/60">
+                      No habits in this category
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setActiveFilter(null)}
+                      className="mt-4 text-sm text-purple-400 hover:text-purple-300"
+                    >
+                      Show all habits
+                    </button>
+                  </div>
+                ) : (
+                  filteredHabits.map((habit) => (
+                    <SortableHabitItem
+                      key={habit.id}
+                      habit={habit}
+                      onUpdate={loadHabits}
+                      onComplete={handleHabitComplete}
+                      categories={categories}
+                      onAddCategory={handleAddCategory}
+                    />
+                  ))
+                )}
               </div>
             </SortableContext>
           </DndContext>
@@ -298,6 +374,8 @@ export default function Home() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onAdd={handleAddHabit}
+        categories={categories}
+        onAddCategory={handleAddCategory}
       />
     </div>
   );

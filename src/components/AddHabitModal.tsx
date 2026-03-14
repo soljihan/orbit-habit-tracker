@@ -1,23 +1,34 @@
 "use client";
 
 import { useState, FormEvent } from 'react';
+import { CategorySelector } from './CategorySelector';
 
 interface AddHabitModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAdd: (name: string) => void;
+  onAdd: (name: string, category: string | null) => void;
+  categories: string[];
+  onAddCategory: (name: string) => void;
 }
 
-export function AddHabitModal({ isOpen, onClose, onAdd }: AddHabitModalProps) {
+export function AddHabitModal({
+  isOpen,
+  onClose,
+  onAdd,
+  categories,
+  onAddCategory,
+}: AddHabitModalProps) {
   const [habitName, setHabitName] = useState('');
+  const [category, setCategory] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (habitName.trim()) {
-      onAdd(habitName.trim());
+      onAdd(habitName.trim(), category);
       setHabitName('');
+      setCategory(null);
       onClose();
     }
   };
@@ -47,6 +58,19 @@ export function AddHabitModal({ isOpen, onClose, onAdd }: AddHabitModalProps) {
               placeholder="e.g., Morning meditation"
               className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/20 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-transparent transition-all duration-200"
               autoFocus
+            />
+          </div>
+
+          <div className="mb-6">
+            <label htmlFor="habit-category" className="block text-sm font-medium text-white/70 mb-2">
+              Category
+            </label>
+            <CategorySelector
+              id="habit-category"
+              categories={categories}
+              value={category}
+              onChange={setCategory}
+              onAddCategory={onAddCategory}
             />
           </div>
 

@@ -8,12 +8,16 @@ interface SortableHabitItemProps {
   habit: HabitWithStats;
   onUpdate: () => void;
   onComplete?: (streakCount: number, habitName: string) => void;
+  categories: string[];
+  onAddCategory: (name: string) => void;
 }
 
 export function SortableHabitItem({
   habit,
   onUpdate,
   onComplete,
+  categories,
+  onAddCategory,
 }: SortableHabitItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: habit.id });
@@ -37,6 +41,8 @@ export function SortableHabitItem({
         onUpdate={onUpdate}
         onComplete={onComplete}
         dragHandleProps={{ ...attributes, ...listeners }}
+        categories={categories}
+        onAddCategory={onAddCategory}
       />
     </div>
   );

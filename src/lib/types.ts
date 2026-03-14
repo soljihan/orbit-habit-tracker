@@ -5,6 +5,7 @@ export interface Habit {
   completedDates: string[]; // ISO date strings (YYYY-MM-DD)
   streakCount: number;
   lastCompletedDate: string | null;
+  category: string | null;
 }
 
 export interface HabitWithStats extends Habit {

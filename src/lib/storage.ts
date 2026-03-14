@@ -2,8 +2,29 @@ import { Habit } from './types';
 import { calculateStreakFromDates, getLatestDate } from './utils';
 
 const STORAGE_KEY = 'orbit-habits';
+const CATEGORIES_KEY = 'orbit-categories';
 
 export const storage = {
+  getCategories(): string[] {
+    if (typeof window === 'undefined') return [];
+    const data = localStorage.getItem(CATEGORIES_KEY);
+    return data ? JSON.parse(data) : [];
+  },
+
+  saveCategories(categories: string[]): void {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
+  },
+
+  addCategory(name: string): void {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const categories = this.getCategories();
+    if (categories.includes(trimmed)) return;
+    categories.push(trimmed);
+    categories.sort();
+    this.saveCategories(categories);
+  },
   getHabits(): Habit[] {
     if (typeof window === 'undefined') return [];
     const data = localStorage.getItem(STORAGE_KEY);
@@ -21,6 +42,7 @@ export const storage = {
         ...habit,
         lastCompletedDate: lastCompletedDate ?? null,
         streakCount,
+        category: habit.category ?? null,
       };
     });
   },
@@ -30,7 +52,7 @@ export const storage = {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(habits));
   },
 
-  addHabit(name: string): Habit {
+  addHabit(name: string, category: string | null = null): Habit {
     const habits = this.getHabits();
     const newHabit: Habit = {
       id: crypto.randomUUID(),
@@ -39,6 +61,7 @@ export const storage = {
       completedDates: [],
       streakCount: 0,
       lastCompletedDate: null,
+      category,
     };
     habits.push(newHabit);
     this.saveHabits(habits);
@@ -55,6 +78,14 @@ export const storage = {
     const habit = habits.find(h => h.id === id);
     if (!habit) return;
     habit.name = name;
+    this.saveHabits(habits);
+  },
+
+  updateHabitCategory(id: string, category: string | null): void {
+    const habits = this.getHabits();
+    const habit = habits.find(h => h.id === id);
+    if (!habit) return;
+    habit.category = category;
     this.saveHabits(habits);
   },
 

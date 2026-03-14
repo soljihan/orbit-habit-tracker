@@ -1,17 +1,26 @@
 "use client";
 
-import { type HTMLAttributes, useRef, useState } from 'react';
+import {
+  type HTMLAttributes,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { HabitWithStats } from '@/lib/types';
 import { storage } from '@/lib/storage';
 import { getTodayString } from '@/lib/utils';
 import { Heatmap } from './Heatmap';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
+import { CategorySelector } from './CategorySelector';
 
 interface HabitItemProps {
   habit: HabitWithStats;
   onUpdate: () => void;
   onComplete?: (streakCount: number, habitName: string) => void;
   dragHandleProps?: HTMLAttributes<HTMLButtonElement>;
+  categories: string[];
+  onAddCategory: (name: string) => void;
 }
 
 export function HabitItem({
@@ -19,13 +28,18 @@ export function HabitItem({
   onUpdate,
   onComplete,
   dragHandleProps,
+  categories,
+  onAddCategory,
 }: HabitItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(habit.name);
+  const [editCategory, setEditCategory] = useState<string | null>(habit.category);
   const ignoreBlurRef = useRef(false);
+  const editContainerRef = useRef<HTMLDivElement>(null);
+  const habitCardRef = useRef<HTMLDivElement>(null);
   const today = getTodayString();
   const isCompletedToday = habit.completedDates.includes(today);
 
@@ -58,13 +72,28 @@ export function HabitItem({
 
   const startEditing = () => {
     setEditName(habit.name);
+    setEditCategory(habit.category);
     setIsEditing(true);
   };
 
-  const cancelEditing = () => {
+  const cancelEditing = useCallback(() => {
     setEditName(habit.name);
+    setEditCategory(habit.category);
     setIsEditing(false);
-  };
+  }, [habit.name, habit.category]);
+
+  useEffect(() => {
+    if (!isEditing) return;
+    const handleDocumentKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        ignoreBlurRef.current = true;
+        cancelEditing();
+      }
+    };
+    document.addEventListener('keydown', handleDocumentKeyDown);
+    return () => document.removeEventListener('keydown', handleDocumentKeyDown);
+  }, [isEditing, cancelEditing]);
 
   const saveEditing = () => {
     const trimmed = editName.trim();
@@ -72,16 +101,32 @@ export function HabitItem({
       cancelEditing();
       return;
     }
-    if (trimmed !== habit.name) {
+    const nameChanged = trimmed !== habit.name;
+    const categoryChanged = editCategory !== habit.category;
+    if (nameChanged) {
       storage.updateHabitName(habit.id, trimmed);
+    }
+    if (categoryChanged) {
+      if (editCategory) {
+        onAddCategory(editCategory);
+      }
+      storage.updateHabitCategory(habit.id, editCategory);
+    }
+    if (nameChanged || categoryChanged) {
       onUpdate();
     }
     setIsEditing(false);
   };
 
   return (
-    <div className="group relative">
-      <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl hover:bg-white/15 transition-all duration-300">
+    <div className="group relative" ref={habitCardRef}>
+      <div
+        className={`backdrop-blur-xl rounded-2xl p-6 shadow-2xl transition-all duration-300 ${
+          isEditing
+            ? 'bg-white/15 border-2 border-purple-400/50 shadow-[0_0_20px_rgba(168,85,247,0.25)]'
+            : 'bg-white/10 border border-white/20 hover:bg-white/15'
+        }`}
+      >
         {/* Main habit row */}
         <div className="flex items-center gap-4">
           {/* Drag handle */}
@@ -129,37 +174,72 @@ export function HabitItem({
           <div className="flex-1">
             <div className="flex flex-wrap items-center gap-3">
               {isEditing ? (
-                <input
-                  value={editName}
-                  onChange={(event) => setEditName(event.target.value)}
-                  onBlur={() => {
-                    if (ignoreBlurRef.current) {
-                      ignoreBlurRef.current = false;
-                      return;
-                    }
-                    saveEditing();
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault();
-                      saveEditing();
-                    } else if (event.key === 'Escape') {
-                      event.preventDefault();
-                      ignoreBlurRef.current = true;
-                      cancelEditing();
-                    }
-                  }}
-                  autoFocus
-                  className="text-lg font-medium text-white bg-white/5 border border-white/10 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-purple-500/40"
-                />
-              ) : (
-                <button
-                  type="button"
-                  onClick={startEditing}
-                  className="rounded-lg px-2 py-1 text-lg font-medium text-white transition-colors hover:bg-white/10 cursor-text"
+                <div
+                  ref={editContainerRef}
+                  className="flex flex-wrap items-start gap-2 w-full min-w-0"
                 >
-                  {habit.name}
-                </button>
+                  <input
+                    value={editName}
+                    onChange={(event) => setEditName(event.target.value)}
+                    onBlur={() => {
+                      if (ignoreBlurRef.current) {
+                        ignoreBlurRef.current = false;
+                        return;
+                      }
+                      setTimeout(() => {
+                        if (
+                          habitCardRef.current?.contains(
+                            document.activeElement
+                          )
+                        )
+                          return;
+                        saveEditing();
+                      }, 0);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        saveEditing();
+                      } else if (event.key === 'Escape') {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        ignoreBlurRef.current = true;
+                        cancelEditing();
+                      }
+                    }}
+                    autoFocus
+                    className="text-lg font-medium text-white bg-white/5 border border-white/10 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-purple-500/40 min-w-[140px] max-w-xs"
+                  />
+                  <div className="min-w-[140px] max-w-[200px]">
+                    <CategorySelector
+                      categories={categories}
+                      value={editCategory}
+                      onChange={setEditCategory}
+                      onAddCategory={onAddCategory}
+                      onSaveRequest={saveEditing}
+                      onCancelRequest={() => {
+                        ignoreBlurRef.current = true;
+                        cancelEditing();
+                      }}
+                      className="!py-2 text-sm"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={startEditing}
+                    className="rounded-lg px-2 py-1 text-lg font-medium text-white transition-colors hover:bg-white/10 cursor-text"
+                  >
+                    {habit.name}
+                  </button>
+                  {habit.category && (
+                    <span className="rounded-full bg-white/5 border border-white/10 px-2 py-0.5 text-xs text-white/60">
+                      {habit.category}
+                    </span>
+                  )}
+                </div>
               )}
               <span className="flex items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-1 text-xs font-semibold text-orange-300">
                 <svg
