@@ -37,9 +37,8 @@ export function HabitItem({
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(habit.name);
   const [editCategory, setEditCategory] = useState<string | null>(habit.category);
-  const ignoreBlurRef = useRef(false);
-  const editContainerRef = useRef<HTMLDivElement>(null);
   const habitCardRef = useRef<HTMLDivElement>(null);
+  const saveEditingRef = useRef<() => void>(() => {});
   const today = getTodayString();
   const isCompletedToday = habit.completedDates.includes(today);
 
@@ -87,13 +86,25 @@ export function HabitItem({
     const handleDocumentKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        ignoreBlurRef.current = true;
         cancelEditing();
       }
     };
     document.addEventListener('keydown', handleDocumentKeyDown);
     return () => document.removeEventListener('keydown', handleDocumentKeyDown);
   }, [isEditing, cancelEditing]);
+
+  useEffect(() => {
+    if (!isEditing) return;
+    const handleDocumentMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (!habitCardRef.current) return;
+      if (habitCardRef.current.contains(target)) return;
+      if ((e.target as HTMLElement).tagName === 'OPTION') return;
+      saveEditingRef.current();
+    };
+    document.addEventListener('mousedown', handleDocumentMouseDown);
+    return () => document.removeEventListener('mousedown', handleDocumentMouseDown);
+  }, [isEditing]);
 
   const saveEditing = () => {
     const trimmed = editName.trim();
@@ -117,6 +128,7 @@ export function HabitItem({
     }
     setIsEditing(false);
   };
+  saveEditingRef.current = saveEditing;
 
   return (
     <div className="group relative" ref={habitCardRef}>
@@ -174,28 +186,10 @@ export function HabitItem({
           <div className="flex-1">
             <div className="flex flex-wrap items-center gap-3">
               {isEditing ? (
-                <div
-                  ref={editContainerRef}
-                  className="flex flex-wrap items-start gap-2 w-full min-w-0"
-                >
+                <div className="flex flex-wrap items-start gap-2 w-full min-w-0">
                   <input
                     value={editName}
                     onChange={(event) => setEditName(event.target.value)}
-                    onBlur={() => {
-                      if (ignoreBlurRef.current) {
-                        ignoreBlurRef.current = false;
-                        return;
-                      }
-                      setTimeout(() => {
-                        if (
-                          habitCardRef.current?.contains(
-                            document.activeElement
-                          )
-                        )
-                          return;
-                        saveEditing();
-                      }, 0);
-                    }}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') {
                         event.preventDefault();
@@ -203,7 +197,6 @@ export function HabitItem({
                       } else if (event.key === 'Escape') {
                         event.preventDefault();
                         event.stopPropagation();
-                        ignoreBlurRef.current = true;
                         cancelEditing();
                       }
                     }}
@@ -217,10 +210,7 @@ export function HabitItem({
                       onChange={setEditCategory}
                       onAddCategory={onAddCategory}
                       onSaveRequest={saveEditing}
-                      onCancelRequest={() => {
-                        ignoreBlurRef.current = true;
-                        cancelEditing();
-                      }}
+                      onCancelRequest={cancelEditing}
                       className="!py-2 text-sm"
                     />
                   </div>
